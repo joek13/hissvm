@@ -44,6 +44,18 @@ const Op = enum(u8) {
     // Pops x,y off of the stack and then pushes x+y
     iadd = 0x30,
 
+    // isub - integer subtraction
+    // Pops x,y off of the stack and then pushes x-y
+    isub = 0x31,
+
+    // imul - integer multiplication
+    // Pops x,y off of the stack and then pushes x*y
+    imul = 0x32,
+
+    // idiv - integer division
+    // Pops x,y off of the stack and then pushes x/y
+    idiv = 0x33,
+
     // == DEBUG ==
 
     // print - print a value
@@ -166,6 +178,24 @@ pub const Machine = struct {
                 const x = self.stack.pop().hint;
                 const y = self.stack.pop().hint;
                 try self.stack.append(.{ .hint = x + y });
+            },
+
+            .isub => {
+                const x = self.stack.pop().hint;
+                const y = self.stack.pop().hint;
+                try self.stack.append(.{ .hint = x - y });
+            },
+
+            .imul => {
+                const x = self.stack.pop().hint;
+                const y = self.stack.pop().hint;
+                try self.stack.append(.{ .hint = x * y });
+            },
+
+            .idiv => {
+                const x = self.stack.pop().hint;
+                const y = self.stack.pop().hint;
+                try self.stack.append(.{ .hint = @divTrunc(x, y) });
             },
 
             .print => {
