@@ -1,4 +1,4 @@
-pub const HType = enum { hint, hfunc };
+pub const HType = enum(u8) { hint = 0x01, hfunc = 0x02 };
 
 pub const HValue = union(HType) { hint: i64, hfunc: Func };
 
