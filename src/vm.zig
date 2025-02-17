@@ -38,6 +38,10 @@ const Op = enum(u8) {
     // Execution returns to the caller.
     ret = 0x22,
 
+    // br <then> <else> - conditional branch
+    // Pops a boolean off the stack. If true, jumps to <then>. Otherwise, jumps to <else>.
+    br = 0x23,
+
     // == ARITHMETIC ==
 
     // iadd - integer addition
@@ -56,11 +60,38 @@ const Op = enum(u8) {
     // Pops x,y off of the stack and then pushes x/y
     idiv = 0x33,
 
+    // iand - bitwise AND
+    // Pops x,y off of the stack and then pushes x&y
+    iand = 0x34,
+
+    // ior - bitwise OR
+    // Pops x,y off of the stack and then pushes x|y
+    ior = 0x35,
+
+    // icmp <op> - integer comparison
+    // Pops x off the stack and compares with zero. Pushes result.
+    icmp = 0x36,
+
     // == DEBUG ==
 
     // print - print a value
     // Prints the value at the top of the stack without modifying it.
     print = 0xf0,
+};
+
+const Cmp = enum(u8) {
+    // x == 0
+    eq = 0x00,
+    // x != 0
+    neq = 0x01,
+    // x < 0
+    lt = 0x02,
+    // x <= 0
+    leq = 0x03,
+    // x > 0
+    gt = 0x04,
+    // x >= 0
+    geq = 0x05,
 };
 
 const Frame = struct {
@@ -106,6 +137,10 @@ pub const Machine = struct {
     }
 
     fn readOp(self: *Machine) Op {
+        return @enumFromInt(self.readByte());
+    }
+
+    fn readCmp(self: *Machine) Cmp {
         return @enumFromInt(self.readByte());
     }
 
@@ -174,6 +209,18 @@ pub const Machine = struct {
                 try self.stack.append(ret_val);
             },
 
+            .br => {
+                const cond = self.stack.pop().hint;
+                const then_addr = self.readByte();
+                const else_addr = self.readByte();
+
+                self.pc = switch (cond) {
+                    1 => then_addr,
+                    0 => else_addr,
+                    else => @panic("Invalid bool"),
+                };
+            },
+
             .iadd => {
                 const x = self.stack.pop().hint;
                 const y = self.stack.pop().hint;
@@ -196,6 +243,31 @@ pub const Machine = struct {
                 const x = self.stack.pop().hint;
                 const y = self.stack.pop().hint;
                 try self.stack.append(.{ .hint = @divTrunc(x, y) });
+            },
+
+            .iand => {
+                const x = self.stack.pop().hint;
+                const y = self.stack.pop().hint;
+                try self.stack.append(.{ .hint = x & y });
+            },
+
+            .ior => {
+                const x = self.stack.pop().hint;
+                const y = self.stack.pop().hint;
+                try self.stack.append(.{ .hint = x | y });
+            },
+
+            .icmp => {
+                const x = self.stack.pop().hint;
+                const result = switch (self.readCmp()) {
+                    .eq => x == 0,
+                    .neq => x != 0,
+                    .lt => x < 0,
+                    .leq => x <= 0,
+                    .gt => x > 0,
+                    .geq => x >= 0,
+                };
+                try self.stack.append(core.hbool(result));
             },
 
             .print => {
