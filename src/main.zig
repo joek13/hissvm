@@ -3,63 +3,78 @@ const std = @import("std");
 const core = @import("core.zig");
 const vm = @import("vm.zig");
 const bytecode = @import("bytecode.zig");
+const assembly = @import("assembly.zig");
+
+const Subcommand = enum { assemble, debug, exec };
+
+const CliError = error{ InvalidSubcommand, NotEnoughArgs };
 
 pub fn main() !void {
+    var args = std.process.args();
+
+    _ = args.skip(); // Skip process name
+    const subcommand_str = args.next() orelse return CliError.NotEnoughArgs;
+
+    const subcommand = std.meta.stringToEnum(Subcommand, subcommand_str) orelse return CliError.InvalidSubcommand;
+    switch (subcommand) {
+        .assemble => try assemble(&args),
+        .exec => try exec(&args, false),
+        .debug => try exec(&args, true),
+    }
+}
+
+fn assemble(args: *std.process.ArgIterator) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const program = [_]u8{
-        // hiss magic bytes
-        0x68, 0x69, 0x73, 0x73,
-        // number of constants
-        0x04,
-        // constant for main function
-        0x02, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00,
-        // constant for add function
-        0x02,
-        0x02, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x0A,
-        // Constant integer 4
-        0x01, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x00, 0x04,
-        // Constant integer 6
-        0x01, 0x00,
-        0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x06,
-        // Program code
-        // main
-        0x00,
-        0x11, 0x02, // pushc $4
-        0x11, 0x03, // pushc $6
-        0x11, 0x01, // pushc add()
-        0x21, // call
-        0xf0, // print
-        0x20, // halt
+    const assembly_path = args.next() orelse return error.NotEnoughArgs;
+    const assembly_file = try std.fs.cwd().openFile(assembly_path, .{});
 
-        // add(x, y)
-        0x13, 0x00, // loadv 0
-        0x13, 0x01, // loadv 1
-        0x30, // iadd
-        0x22, // ret
-    };
+    var buffer = std.ArrayList(u8).init(allocator);
+    defer buffer.deinit();
+    try assembly_file.reader().readAllArrayList(&buffer, std.math.maxInt(usize));
 
-    var reader = bytecode.ModuleReader.init(allocator, &program);
-    defer reader.deinit();
+    var assembler = assembly.Assembler.init(allocator, buffer.items);
+    defer assembler.deinit();
 
-    const mod = try reader.readModule();
+    const bc = try assembler.readModule();
+
+    const out_path = try std.fmt.allocPrint(allocator, "{s}.hissc", .{std.fs.path.stem(assembly_path)});
+    defer allocator.free(out_path);
+
+    const out_file = try std.fs.cwd().createFile(out_path, .{ .read = true });
+    try out_file.writer().writeAll(bc);
+
+    std.debug.print("Bytecode written to {s}\n", .{out_path});
+}
+
+fn exec(args: *std.process.ArgIterator, debug: bool) !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    const bc_path = args.next() orelse return error.NotEnoughArgs;
+    const bc_file = try std.fs.cwd().openFile(bc_path, .{});
+
+    var buffer = std.ArrayList(u8).init(allocator);
+    defer buffer.deinit();
+    try bc_file.reader().readAllArrayList(&buffer, std.math.maxInt(usize));
+
+    var mod_reader = bytecode.ModuleReader.init(allocator, buffer.items);
+    defer mod_reader.deinit();
+
+    const mod = try mod_reader.readModule();
     var machine = try vm.Machine.init(allocator, mod);
     defer machine.deinit();
 
-    const stdin = std.io.getStdIn().reader();
+    var stdin = std.io.getStdIn();
     while (true) {
-        machine.printState();
-        var buf: [10]u8 = undefined;
-        _ = try stdin.readUntilDelimiterOrEof(&buf, '\n');
+        if (debug) {
+            machine.printState();
+            var buf: [10]u8 = undefined;
+            _ = try stdin.reader().readUntilDelimiterOrEof(&buf, '\n');
+        }
         const halt = try machine.step();
         if (halt) break;
     }

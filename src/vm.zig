@@ -2,7 +2,7 @@ const std = @import("std");
 
 const core = @import("core.zig");
 
-const Op = enum(u8) {
+pub const Op = enum(u8) {
     // noop - no operation
     // Does nothing.
     noop = 0x00,
