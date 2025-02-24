@@ -1,3 +1,5 @@
+# adds 4 and 6 together.
+
 .constants {
     hfunc 0 $main
     hfunc 2 $add

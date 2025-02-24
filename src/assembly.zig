@@ -93,11 +93,54 @@ fn TokenData(comptime tokenType: TokenType) type {
     @compileError("Invalid tag");
 }
 
+// Iterates over string tokens for our assembler language.
+// Ignores parts of line after a '#' character, if present.
+const RawTokenIterator = struct {
+    lines: std.mem.TokenIterator(u8, .scalar),
+    current_line: ?std.mem.TokenIterator(u8, .any) = null,
+
+    fn init(source: []const u8) RawTokenIterator {
+        return .{ .lines = std.mem.tokenizeScalar(u8, source, '\n') };
+    }
+
+    // Advances to the next line. Returns false if there is no next line.
+    fn nextLine(self: *RawTokenIterator) bool {
+        const line = self.lines.next() orelse return false;
+        const line_end = std.mem.indexOf(u8, line, "#") orelse line.len;
+        self.current_line = std.mem.tokenizeAny(u8, line[0..line_end], &std.ascii.whitespace);
+        return true;
+    }
+
+    fn next(self: *RawTokenIterator) ?[]const u8 {
+        while (true) {
+            if (self.current_line) |*line| {
+                if (line.next()) |token| {
+                    return token;
+                }
+            }
+
+            if (!self.nextLine()) return null;
+        }
+    }
+
+    fn peek(self: *RawTokenIterator) ?[]const u8 {
+        while (true) {
+            if (self.current_line) |*line| {
+                if (line.peek()) |token| {
+                    return token;
+                }
+            }
+
+            if (!self.nextLine()) return null;
+        }
+    }
+};
+
 const TokenIterator = struct {
-    inner: std.mem.TokenIterator(u8, .any),
+    inner: RawTokenIterator,
 
     fn init(source: []const u8) TokenIterator {
-        return TokenIterator{ .inner = std.mem.tokenizeAny(u8, source, &std.ascii.whitespace) };
+        return .{ .inner = RawTokenIterator.init(source) };
     }
 
     fn peek(self: *TokenIterator) AssemblerError!Token {

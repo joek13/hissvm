@@ -1,3 +1,5 @@
+# prints out first ten elements of the fibonacci series.
+
 .constants {
     hfunc 0 $main
     hint 1
@@ -12,44 +14,43 @@
 main:
     pushc 4
     pushc 6
-    call
+    call # loop(0)
     halt
 loop:
     loadv 0
     pushc 5
     isub
     icmp 0x04
-    br 0x00 0x01
+    br 0x00 0x01 # if i < 10
     ret
     loadv 0
     pushc 3
-    call
-    print
+    call # fib(i)
+    print # print(_)
     loadv 0
     pushc 1
     iadd
     pushc 6
-    call
+    call # fib(i+1)
     ret
 fib:
     pushc 1
     loadv 0
     isub
     icmp 0x04
-    br 0x00 0x03
+    br 0x00 0x03 # if i <= 1
     pushc 1
-    ret
-recurse:
+    ret # return 1
     pushc 1
     loadv 0
     isub
     pushc 3
-    call
+    call # fib(i-1)
     pushc 2
     loadv 0
     isub
     pushc 3
-    call
-    iadd
+    call # fib(i-2)
+    iadd # fib(i-1) + fib(i-2)
     ret
 }
