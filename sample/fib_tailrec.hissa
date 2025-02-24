@@ -1,0 +1,65 @@
+# prints the first 50 elements of the fibonacci series.
+# this one is a lot more efficient because it is "tail recursive"
+# we haven't actually implemented reusable stack frames yet, but it's still better than the naive approach
+# because it only recurses once in the recursive case. (so the number of steps/frames is linear in n rather than exponential)
+.constants {
+    hfunc 0 $main
+    hfunc 1 $loop
+    hfunc 3 $fib
+    hint 0
+    hint 1
+    hint 50
+    hint 0
+}
+
+.code {
+main:
+    pushc 6
+    pushc 1
+    call
+    halt
+loop:
+    loadv 0
+    pushc 5
+    isub
+    icmp 0x04
+    br 0x00 0x01
+    ret
+    loadv 0
+    pushc 4
+    pushc 4
+    pushc 2
+    call
+    print
+    loadv 0
+    pushc 4
+    iadd
+    pushc 1
+    call
+    ret
+fib:
+    pushc 3
+    loadv 0
+    isub
+    icmp 0x01
+    br 0x00 0x03
+    loadv 1
+    ret
+    pushc 4
+    loadv 0
+    isub
+    icmp 0x01
+    br 0x00 0x03
+    loadv 2
+    ret
+    pushc 4
+    loadv 0
+    isub
+    loadv 2
+    loadv 1
+    loadv 2
+    iadd
+    pushc 2
+    call
+    ret
+}
