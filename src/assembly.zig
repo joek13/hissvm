@@ -2,7 +2,7 @@ const vm = @import("./vm.zig");
 const core = @import("./core.zig");
 const std = @import("std");
 
-const AssemblerError = error{ InvalidToken, UnexpectedToken, OutOfRange };
+const AssemblerError = error{ InvalidToken, UnexpectedToken, OutOfRange, UnresolvedReference, DuplicateLabel };
 
 const TokenType = enum { section, lbrace, rbrace, int, label, htype, instr, ident, eof };
 
@@ -155,16 +155,27 @@ test "expect us to fail on an unexpected token" {
     try std.testing.expectEqual(error.UnexpectedToken, iter.expectLit(.lbrace));
 }
 
+const LabelReference = struct {
+    /// Bytecode offset to paste resolved symbol address.
+    offset: usize,
+    /// Label to resolve.
+    label: []const u8,
+    /// Whether this reference has been resolved.
+    resolved: bool = false,
+};
+
 pub const Assembler = struct {
     tokens: TokenIterator,
     bytecode: std.ArrayList(u8),
+    references: std.ArrayList(LabelReference),
 
     pub fn init(allocator: std.mem.Allocator, source: []const u8) Assembler {
-        return .{ .tokens = TokenIterator.init(source), .bytecode = std.ArrayList(u8).init(allocator) };
+        return .{ .tokens = TokenIterator.init(source), .bytecode = std.ArrayList(u8).init(allocator), .references = std.ArrayList(LabelReference).init(allocator) };
     }
 
     pub fn deinit(self: Assembler) void {
         self.bytecode.deinit();
+        self.references.deinit();
     }
 
     /// Reads module constants.
@@ -204,13 +215,22 @@ pub const Assembler = struct {
                     const arity = try self.tokens.expectAny(.int);
                     const arity_u8 = std.math.cast(u8, arity) orelse return AssemblerError.OutOfRange;
 
-                    // TODO: handle when function offset is a label reference
-                    const offset = try self.tokens.expectAny(.int);
-                    var buffer: [8]u8 = undefined;
-                    std.mem.writeInt(u64, &buffer, offset, .big);
-
                     try self.bytecode.append(arity_u8);
-                    try self.bytecode.appendSlice(&buffer);
+
+                    const offset_token = try self.tokens.next();
+                    switch (offset_token) {
+                        .int => |offset| {
+                            var buffer: [8]u8 = undefined;
+                            std.mem.writeInt(u64, &buffer, offset, .big);
+                            try self.bytecode.appendSlice(&buffer);
+                        },
+                        .ident => |label| {
+                            // We don't yet know the offset for the referenced label. Add a placeholder for us to fill later.
+                            try self.references.append(.{ .offset = self.bytecode.items.len, .label = label });
+                            try self.bytecode.appendNTimes(0xFF, 8);
+                        },
+                        else => return error.UnexpectedToken,
+                    }
                 },
             }
         }
@@ -226,12 +246,32 @@ pub const Assembler = struct {
         try self.tokens.expectLit(.{ .section = "code" });
         try self.tokens.expectLit(.lbrace);
 
+        // Bytecode offset of .code section
+        const code_section = self.bytecode.items.len;
+
         // Read until end of block
         while (!(try self.tokens.peek()).eql(.rbrace)) {
             const token = try self.tokens.next();
             switch (token) {
-                .label => {
-                    // TODO: handle labels
+                .label => |label| {
+                    // Function offsets are relative to the beginning of the .code section
+                    const code_offset = self.bytecode.items.len - code_section;
+                    const code_offset_i64 = std.math.cast(i64, code_offset) orelse return AssemblerError.OutOfRange;
+
+                    // When we see a label, go back and fill in its placeholders
+                    for (self.references.items) |*reference| {
+                        if (std.mem.eql(u8, label, reference.label)) {
+                            if (reference.resolved) {
+                                // Reference has already been resolved. This label must be duplicated
+                                return error.DuplicateLabel;
+                            } else {
+                                reference.resolved = true;
+                            }
+
+                            const placeholder = self.bytecode.items[reference.offset..][0..8];
+                            std.mem.writeInt(i64, placeholder, code_offset_i64, .big);
+                        }
+                    }
                 },
                 .instr => |op| {
                     try self.bytecode.append(@intFromEnum(op));
@@ -257,6 +297,11 @@ pub const Assembler = struct {
         // Read module constants and code
         try self.readConstants();
         try self.readCode();
+
+        // Check that all references were resolved
+        for (self.references.items) |reference| {
+            if (!reference.resolved) return AssemblerError.UnresolvedReference;
+        }
 
         return self.bytecode.items;
     }

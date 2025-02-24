@@ -38,8 +38,11 @@ pub const Op = enum(u8) {
     // Execution returns to the caller.
     ret = 0x22,
 
-    // br <then> <else> - conditional branch
-    // Pops a boolean off the stack. If true, jumps to <then>. Otherwise, jumps to <else>.
+    // br <then1> <then2> - conditional branch
+    // Pops a boolean off the stack.
+    // then1 and then2 form the high and low byte of a signed 16-bit offset.
+    // If true, adjusts PC by this offset.
+    // Otherwise, continues to next instruction.
     br = 0x23,
 
     // == ARITHMETIC ==
@@ -105,6 +108,14 @@ pub const Module = struct {
     constants: []const core.HValue,
     code: []const u8,
 };
+
+/// Reads a signed offsets from two u8's.
+/// High and low are taken as the high and low bytes of an i16.
+fn readSignedOffset(high: u8, low: u8) isize {
+    const unsigned = @as(u16, high) << 8 | low;
+    const signed: i16 = @bitCast(unsigned);
+    return @intCast(signed);
+}
 
 pub const Machine = struct {
     mod: Module,
@@ -186,10 +197,9 @@ pub const Machine = struct {
 
             .call => {
                 const callee = self.stack.pop().hfunc;
-                const fp = self.stack.items.len;
 
-                // Allocate locals for function arguments by copying last N items on stack
-                try self.stack.appendSlice(self.stack.items[fp - callee.arity .. fp]);
+                // Function arguments are last N items on stack
+                const fp = self.stack.items.len - callee.arity;
 
                 const frame = .{ .func = callee, .fp = fp, .ret_addr = self.pc };
                 try self.frames.append(frame);
@@ -211,14 +221,13 @@ pub const Machine = struct {
 
             .br => {
                 const cond = self.stack.pop().hint;
-                const then_addr = self.readByte();
-                const else_addr = self.readByte();
+                const br_offset = readSignedOffset(self.readByte(), self.readByte());
 
-                self.pc = switch (cond) {
-                    1 => then_addr,
-                    0 => else_addr,
+                switch (cond) {
+                    1 => self.pc = @intCast(@as(isize, @intCast(self.pc)) + br_offset),
+                    0 => {},
                     else => @panic("Invalid bool"),
-                };
+                }
             },
 
             .iadd => {

@@ -1,0 +1,55 @@
+.constants {
+    hfunc 0 $main
+    hint 1
+    hint 2
+    hfunc 1 $fib
+    hint 0
+    hint 10
+    hfunc 1 $loop
+}
+
+.code {
+main:
+    pushc 4
+    pushc 6
+    call
+    halt
+loop:
+    loadv 0
+    pushc 5
+    isub
+    icmp 0x04
+    br 0x00 0x01
+    ret
+    loadv 0
+    pushc 3
+    call
+    print
+    loadv 0
+    pushc 1
+    iadd
+    pushc 6
+    call
+    ret
+fib:
+    pushc 1
+    loadv 0
+    isub
+    icmp 0x04
+    br 0x00 0x03
+    pushc 1
+    ret
+recurse:
+    pushc 1
+    loadv 0
+    isub
+    pushc 3
+    call
+    pushc 2
+    loadv 0
+    isub
+    pushc 3
+    call
+    iadd
+    ret
+}

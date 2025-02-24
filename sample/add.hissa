@@ -1,0 +1,23 @@
+.constants {
+    hfunc 0 $main
+    hfunc 2 $add
+    hint 0x04
+    hint 0x06
+}
+
+.code {
+    main:
+        noop
+        pushc 0x02
+        pushc 0x03
+        pushc 0x01
+        call
+        print
+        halt
+
+    add:
+        loadv 0x00
+        loadv 0x01
+        iadd
+        ret
+}
