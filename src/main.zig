@@ -79,3 +79,7 @@ fn exec(args: *std.process.ArgIterator, debug: bool) !void {
         if (halt) break;
     }
 }
+
+test {
+    std.testing.refAllDecls(@This());
+}

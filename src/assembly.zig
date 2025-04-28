@@ -165,7 +165,7 @@ const TokenIterator = struct {
 };
 
 test "expect us to correctly tokenize a simple string" {
-    const source = ".constants: { hint } 16 0x10 main: pushc $main";
+    const source = ".constants { hint } 16 0x10 main: pushc $main";
     var iter = TokenIterator.init(source);
 
     try iter.expectLit(.{ .section = "constants" });
@@ -364,6 +364,5 @@ test "expect us to read well formed assembly" {
     var assembler = Assembler.init(std.testing.allocator, source);
     defer assembler.deinit();
 
-    const buffer = try assembler.readModule();
-    std.debug.print("{any}", .{buffer});
+    _ = try assembler.readModule();
 }
