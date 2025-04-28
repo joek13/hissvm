@@ -167,7 +167,7 @@ pub const Machine = struct {
         try self.stack.append(v);
     }
 
-    pub fn step(self: *Machine) !bool {
+    pub fn step(self: *Machine, writer: anytype) !bool {
         if (self.frames.items.len == 0)
             return true; // halt if we return from main
 
@@ -294,7 +294,14 @@ pub const Machine = struct {
 
             .print => {
                 const v = self.stack.getLast();
-                std.debug.print("{}\n", .{v});
+                switch (v) {
+                    .hint => |x| {
+                        try writer.print("{}\n", .{x});
+                    },
+                    .hfunc => |f| {
+                        try writer.print("<{}-ary fn @ 0x{X:0>2}>\n", .{ f.arity, f.offset });
+                    },
+                }
             },
         }
 

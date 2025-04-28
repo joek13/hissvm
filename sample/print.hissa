@@ -1,0 +1,23 @@
+# validates print format
+
+.constants {
+    hfunc 0 $main
+    hfunc 2 $add
+    hint 42
+}
+
+.code {
+main:
+    pushc 0
+    print
+    pushc 1
+    print
+    pushc 2
+    print
+    halt
+add:
+    loadv 0x00
+    loadv 0x01
+    iadd
+    ret
+}

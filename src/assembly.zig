@@ -346,7 +346,7 @@ pub const Assembler = struct {
             if (!reference.resolved) return AssemblerError.UnresolvedReference;
         }
 
-        return self.bytecode.items;
+        return self.bytecode.toOwnedSlice();
     }
 };
 
@@ -364,5 +364,6 @@ test "expect us to read well formed assembly" {
     var assembler = Assembler.init(std.testing.allocator, source);
     defer assembler.deinit();
 
-    _ = try assembler.readModule();
+    const bytecode = try assembler.readModule();
+    defer std.testing.allocator.free(bytecode);
 }
