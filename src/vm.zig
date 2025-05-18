@@ -129,10 +129,10 @@ pub const Machine = struct {
 
         // By convention, constant 0 is the main function
         const main = mod.constants[0].hfunc;
-        const frame = .{ .func = main, .fp = 0, .ret_addr = 0 };
+        const frame = Frame { .func = main, .fp = 0, .ret_addr = 0 };
         try frames.append(frame);
 
-        const machine = .{ .mod = mod, .pc = main.offset, .stack = stack, .frames = frames };
+        const machine = Machine { .mod = mod, .pc = main.offset, .stack = stack, .frames = frames };
         return machine;
     }
 
@@ -159,6 +159,14 @@ pub const Machine = struct {
         return &self.frames.items[self.frames.items.len - 1];
     }
 
+    fn popStack(self: *Machine) core.HValue {
+        return self.stack.pop() orelse @panic("pop on empty stack");
+    }
+
+    fn pushStack(self: *Machine, v: core.HValue) !void {
+        try self.stack.append(v);
+    }
+
     pub fn step(self: *Machine) !bool {
         if (self.frames.items.len == 0)
             return true; // halt if we return from main
@@ -172,22 +180,22 @@ pub const Machine = struct {
             // pushc <idx>
             .pushc => {
                 const c = self.mod.constants[self.readByte()];
-                try self.stack.append(c);
+                try self.pushStack(c);
             },
 
             .pop => {
-                _ = self.stack.pop();
+                _ = self.popStack();
             },
 
             // loadv <idx>
             .loadv => {
                 const v = self.stack.items[self.curFrame().fp + self.readByte()];
-                try self.stack.append(v);
+                try self.pushStack(v);
             },
 
             // storev <idx>
             .storev => {
-                const v = self.stack.pop();
+                const v = self.popStack();
                 self.stack.items[self.curFrame().fp + self.readByte()] = v;
             },
 
@@ -196,12 +204,12 @@ pub const Machine = struct {
             },
 
             .call => {
-                const callee = self.stack.pop().hfunc;
+                const callee = self.popStack().hfunc;
 
                 // Function arguments are last N items on stack
                 const fp = self.stack.items.len - callee.arity;
 
-                const frame = .{ .func = callee, .fp = fp, .ret_addr = self.pc };
+                const frame = Frame { .func = callee, .fp = fp, .ret_addr = self.pc };
                 try self.frames.append(frame);
 
                 self.pc = callee.offset;
@@ -209,18 +217,18 @@ pub const Machine = struct {
 
             .ret => {
                 // Pop frame we are returning from and jump to its ret_addr
-                const frame = self.frames.pop();
+                const frame = self.frames.pop() orelse @panic("ret with empty callstack");
                 self.pc = frame.ret_addr;
 
                 // Pop return value from stack and deallocate remaining stack variables
-                const ret_val = self.stack.pop();
+                const ret_val = self.popStack();
                 self.stack.items.len = frame.fp;
                 // Push return value to stack
-                try self.stack.append(ret_val);
+                try self.pushStack(ret_val);
             },
 
             .br => {
-                const cond = self.stack.pop().hint;
+                const cond = self.popStack().hint;
                 const br_offset = readSignedOffset(self.readByte(), self.readByte());
 
                 switch (cond) {
@@ -231,43 +239,43 @@ pub const Machine = struct {
             },
 
             .iadd => {
-                const x = self.stack.pop().hint;
-                const y = self.stack.pop().hint;
-                try self.stack.append(.{ .hint = x + y });
+                const x = self.popStack().hint;
+                const y = self.popStack().hint;
+                try self.pushStack(.{ .hint = x + y });
             },
 
             .isub => {
-                const x = self.stack.pop().hint;
-                const y = self.stack.pop().hint;
-                try self.stack.append(.{ .hint = x - y });
+                const x = self.popStack().hint;
+                const y = self.popStack().hint;
+                try self.pushStack(.{ .hint = x - y });
             },
 
             .imul => {
-                const x = self.stack.pop().hint;
-                const y = self.stack.pop().hint;
-                try self.stack.append(.{ .hint = x * y });
+                const x = self.popStack().hint;
+                const y = self.popStack().hint;
+                try self.pushStack(.{ .hint = x * y });
             },
 
             .idiv => {
-                const x = self.stack.pop().hint;
-                const y = self.stack.pop().hint;
-                try self.stack.append(.{ .hint = @divTrunc(x, y) });
+                const x = self.popStack().hint;
+                const y = self.popStack().hint;
+                try self.pushStack(.{ .hint = @divTrunc(x, y) });
             },
 
             .iand => {
-                const x = self.stack.pop().hint;
-                const y = self.stack.pop().hint;
-                try self.stack.append(.{ .hint = x & y });
+                const x = self.popStack().hint;
+                const y = self.popStack().hint;
+                try self.pushStack(.{ .hint = x & y });
             },
 
             .ior => {
-                const x = self.stack.pop().hint;
-                const y = self.stack.pop().hint;
-                try self.stack.append(.{ .hint = x | y });
+                const x = self.popStack().hint;
+                const y = self.popStack().hint;
+                try self.pushStack(.{ .hint = x | y });
             },
 
             .icmp => {
-                const x = self.stack.pop().hint;
+                const x = self.popStack().hint;
                 const result = switch (self.readCmp()) {
                     .eq => x == 0,
                     .neq => x != 0,
@@ -276,7 +284,7 @@ pub const Machine = struct {
                     .gt => x > 0,
                     .geq => x >= 0,
                 };
-                try self.stack.append(core.hbool(result));
+                try self.pushStack(core.hbool(result));
             },
 
             .print => {

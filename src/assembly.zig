@@ -86,7 +86,7 @@ fn convertToken(token_or_null: ?[]const u8) AssemblerError!Token {
 /// Returns the data type associated with a given token type.
 /// E.g., for .instr, it's vm.Op. For .lbrace, it's void.
 fn TokenData(comptime tokenType: TokenType) type {
-    const info = @typeInfo(Token).Union;
+    const info = @typeInfo(Token).@"union";
     inline for (info.fields) |field| {
         if (std.mem.eql(u8, field.name, @tagName(tokenType))) return field.type;
     }
