@@ -5,12 +5,12 @@ pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
         .name = "main",
         .root_source_file = b.path("src/main.zig"),
-        .target = b.host,
+        .target = b.graph.host,
     });
     b.installArtifact(exe);
 
     // Unit tests
-    const unit_tests = b.addTest(.{ .root_source_file = b.path("src/main.zig"), .target = b.host });
+    const unit_tests = b.addTest(.{ .root_source_file = b.path("src/main.zig"), .target = b.graph.host });
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(unit_tests).step);
 
