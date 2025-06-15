@@ -129,10 +129,10 @@ pub const Machine = struct {
 
         // By convention, constant 0 is the main function
         const main = mod.constants[0].hfunc;
-        const frame = Frame { .func = main, .fp = 0, .ret_addr = 0 };
+        const frame = Frame{ .func = main, .fp = 0, .ret_addr = 0 };
         try frames.append(frame);
 
-        const machine = Machine { .mod = mod, .pc = main.offset, .stack = stack, .frames = frames };
+        const machine = Machine{ .mod = mod, .pc = main.offset, .stack = stack, .frames = frames };
         return machine;
     }
 
@@ -189,7 +189,12 @@ pub const Machine = struct {
 
             // loadv <idx>
             .loadv => {
-                const v = self.stack.items[self.curFrame().fp + self.readByte()];
+                // Assigning to a var here is a workaround to prevent the compiler
+                // from applying an incorrect parameter reference optimization that
+                // can cause undefined behavior and segfaults.
+                // Ref: https://github.com/ziglang/zig/issues/23050
+                var v: core.HValue = undefined;
+                v = self.stack.items[self.curFrame().fp + self.readByte()];
                 try self.pushStack(v);
             },
 
@@ -209,7 +214,7 @@ pub const Machine = struct {
                 // Function arguments are last N items on stack
                 const fp = self.stack.items.len - callee.arity;
 
-                const frame = Frame { .func = callee, .fp = fp, .ret_addr = self.pc };
+                const frame = Frame{ .func = callee, .fp = fp, .ret_addr = self.pc };
                 try self.frames.append(frame);
 
                 self.pc = callee.offset;
