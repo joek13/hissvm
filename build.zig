@@ -38,8 +38,28 @@ pub fn build(b: *std.Build) void {
     iotests_step.dependOn(&run_iotests.step);
     iotests_step.dependOn(&install_iotests.step);
 
+    // hissasm tool
+    const mod_hissasm = b.addModule("hissasm", .{ .root_source_file = b.path("tools/hissasm.zig"), .target = b.graph.host });
+    mod_hissasm.addImport("hissvm", mod);
+
+    // compile and install hissasm
+    const hissasm = b.addExecutable(.{ .name = "hissasm", .root_module = mod_hissasm });
+    const install_hissasm = b.addInstallArtifact(hissasm, .{});
+    b.getInstallStep().dependOn(&install_hissasm.step);
+
+    // hissvm tool
+    const mod_hissvm = b.addModule("hissvm", .{ .root_source_file = b.path("tools/hissvm.zig"), .target = b.graph.host });
+    mod_hissvm.addImport("hissvm", mod);
+
+    // compile and install hissvm
+    const hissvm = b.addExecutable(.{ .name = "hissvm", .root_module = mod_hissvm });
+    const install_hissvm = b.addInstallArtifact(hissvm, .{});
+    b.getInstallStep().dependOn(&install_hissvm.step);
+
     const all = b.step("all", "Check formatting, run unit tests, and run iotests");
     all.dependOn(fmt_check_step);
     all.dependOn(test_step);
     all.dependOn(iotests_step);
+    all.dependOn(&install_hissasm.step);
+    all.dependOn(&install_hissvm.step);
 }
