@@ -45,6 +45,11 @@ pub const Op = enum(u8) {
     // Otherwise, continues to next instruction.
     br = 0x23,
 
+    // jmp <offset1> <offset2> - jump
+    // offset1 and offset2 form the high and low byte of a signed 16-bit offset.
+    // Adjusts PC by this offset.
+    jmp = 0x24,
+
     // == ARITHMETIC ==
 
     // iadd - integer addition
@@ -241,6 +246,11 @@ pub const Machine = struct {
                     0 => {},
                     else => @panic("Invalid bool"),
                 }
+            },
+
+            .jmp => {
+                const jmp_offset = readSignedOffset(self.readByte(), self.readByte());
+                self.pc = @intCast(@as(isize, @intCast(self.pc)) + jmp_offset);
             },
 
             .iadd => {

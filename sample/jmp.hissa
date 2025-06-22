@@ -1,0 +1,17 @@
+# tests jmp instruction
+.constants {
+    hfunc 0 $main
+    hint 42
+    hint 43
+}
+
+.code {
+main:
+    jmp 0x00 0x04 # jump ahead to b
+    pushc 1 # a
+    print # print 42
+    halt
+    pushc 2 # b
+    print # print 43
+    jmp 0xFF 0xF6 # jump back to a
+}
