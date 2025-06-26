@@ -25,6 +25,14 @@ pub const Op = enum(u8) {
     // Pops a value off the top of the stack and stores in a local variable at the given index.
     storev = 0x14,
 
+    // loadg <idx> - load from a global variable
+    // Loads the global variable at given index and pushes onto the stack.
+    loadg = 0x15,
+
+    // storeg <idx> - store into a global variable
+    // Pops a value off the top of the stack and stores in a global variable at the given index.
+    storeg = 0x16,
+
     // == CONTROL FLOW ==
 
     // halt - stops program execution
@@ -127,6 +135,9 @@ pub const Machine = struct {
     pc: usize,
     stack: std.ArrayList(core.HValue),
     frames: std.ArrayList(Frame),
+    // It's stupid to use a fixed number of program globals.
+    // TODO: include the number of program globals in the bytecode itself.
+    globals: [64]?core.HValue,
 
     pub fn init(allocator: std.mem.Allocator, mod: Module) !Machine {
         const stack = std.ArrayList(core.HValue).init(allocator);
@@ -137,7 +148,9 @@ pub const Machine = struct {
         const frame = Frame{ .func = main, .fp = 0, .ret_addr = 0 };
         try frames.append(frame);
 
-        const machine = Machine{ .mod = mod, .pc = main.offset, .stack = stack, .frames = frames };
+        const globals = [_]?core.HValue{null} ** 64;
+
+        const machine = Machine{ .mod = mod, .pc = main.offset, .stack = stack, .frames = frames, .globals = globals };
         return machine;
     }
 
@@ -207,6 +220,18 @@ pub const Machine = struct {
             .storev => {
                 const v = self.popStack();
                 self.stack.items[self.curFrame().fp + self.readByte()] = v;
+            },
+
+            // loadg <idx>
+            .loadg => {
+                const g = self.globals[self.readByte()] orelse @panic("load uninitialized global");
+                try self.pushStack(g);
+            },
+
+            // storeg <idx>
+            .storeg => {
+                const v = self.popStack();
+                self.globals[self.readByte()] = v;
             },
 
             .halt => {
